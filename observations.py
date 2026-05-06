@@ -59,10 +59,14 @@ def pretty_print_gamestate(raw_state: dict) -> None:
             current_blind_score = blind.get("score", 0)
             break
 
+    jokers = raw_state.get("jokers", {}) or {}
     print(hand_cards)
     print(
         f"Hands: {round_info.get('hands_left', 0)}, "
         f"Discards: {round_info.get('discards_left', 0)}"
+    )
+    print(
+        f"Jokers: {jokers.get('count', 0)}/{jokers.get('limit', 0)}"
     )
     print(
         f"Round Score: {int(round_info.get('chips', 0))} / {int(current_blind_score)}"
@@ -70,7 +74,7 @@ def pretty_print_gamestate(raw_state: dict) -> None:
     print(
         f"Round: {raw_state.get('round_num', 0)}, "
         f"Ante: {raw_state.get('ante_num', 0)}, "
-        f"Money: {raw_state.get('money', 0)}"
+        f"Money: {raw_state.get('money', 0)}\n"
     )
 
 
