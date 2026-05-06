@@ -3,6 +3,22 @@ from typing import Any
 from dataclasses import dataclass
 import json
 
+
+@dataclass
+class State:
+    limit: int
+    highlighted_limit: int
+    cards: List[Card]
+    count: int
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'State':
+        _limit = int(obj.get("limit"))
+        _highlighted_limit = int(obj.get("highlighted_limit"))
+        _cards = [Card.from_dict(y) for y in obj.get("cards")]
+        _count = int(obj.get("count"))
+        return State(_limit, _highlighted_limit, _cards, _count)
+
 @dataclass
 class Card:
     label: str
@@ -38,20 +54,6 @@ class Cost:
         _buy = int(obj.get("buy"))
         return Cost(_sell, _buy)
 
-@dataclass
-class State:
-    limit: int
-    highlighted_limit: int
-    cards: List[Card]
-    count: int
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'State':
-        _limit = int(obj.get("limit"))
-        _highlighted_limit = int(obj.get("highlighted_limit"))
-        _cards = [Card.from_dict(y) for y in obj.get("cards")]
-        _count = int(obj.get("count"))
-        return State(_limit, _highlighted_limit, _cards, _count)
 
 @dataclass
 class Value:
