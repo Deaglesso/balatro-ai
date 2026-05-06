@@ -219,6 +219,5 @@ __marimo__/
 
 # project specific
 logs
-.vscode
 project-logs
 .DS_Store
