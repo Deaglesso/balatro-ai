@@ -1,0 +1,9 @@
+### Get Game State
+POST http://127.0.0.1:12346
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "gamestate",
+  "id": 1
+}
