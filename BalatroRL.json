@@ -1,0 +1,16 @@
+{
+	"id": "BalatroRL",
+	"name": "Balatro RL Simplifier",
+	"display_name": "BalatroRL",
+	"author": ["Group7"],
+	"description": "Simplifies Balatro for RL training: auto-selects blinds, whitelists jokers, disables planets/tarots/packs.",
+	"prefix": "brl",
+	"main_file": "main.lua",
+	"priority": -10,
+	"badge_colour": "1a1a2e",
+	"badge_text_colour": "e0e0ff",
+	"version": "1.0.0",
+	"dependencies": [
+		"Steamodded"
+	]
+}
