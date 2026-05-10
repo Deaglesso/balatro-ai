@@ -18,15 +18,71 @@ local function is_allowed(card)
     return is_allowed_key(card.config.center_key)
 end
 
-local function enforce_shop()
-    if not G or G.STATE ~= G.STATES.SHOP then return end
+------------------------------------------------------------------
+-- STRIP EDITION from a joker card (foil, holo, polychrome etc)
+------------------------------------------------------------------
+local function strip_edition(card)
+    if not card then return end
+    if card.edition then
+        card:set_edition(nil, true)
+    end
+end
 
-    if G.shop_jokers and G.shop_jokers.cards then
-        for i = #G.shop_jokers.cards, 1, -1 do
-            if not is_allowed(G.shop_jokers.cards[i]) then
-                G.shop_jokers.cards[i]:remove()
-                table.remove(G.shop_jokers.cards, i)
-            end
+------------------------------------------------------------------
+-- STRIP ENHANCEMENT from a playing card
+------------------------------------------------------------------
+local function strip_enhancement(card)
+    if not card then return end
+    if card.config and card.config.center and card.config.center.set == "Enhanced" then
+        card:set_ability(G.P_CENTERS["c_base"])
+    end
+end
+
+------------------------------------------------------------------
+-- STRIP SEAL from a playing card
+------------------------------------------------------------------
+local function strip_seal(card)
+    if not card then return end
+    if card.seal then
+        card:set_seal(nil, true)
+    end
+end
+
+------------------------------------------------------------------
+-- ENFORCE SHOP CONTENTS
+------------------------------------------------------------------
+local shop_filled = false
+local last_joker_count = 0
+local shop_enter_time = 0
+
+local function enforce_shop()
+    if not G or G.STATE ~= G.STATES.SHOP then
+        shop_filled = false
+        shop_enter_time = 0
+        return
+    end
+
+    if not G.shop_jokers or not G.shop_jokers.cards then return end
+
+    local current_joker_count = G.jokers and #G.jokers.cards or 0
+    if current_joker_count ~= last_joker_count then
+        last_joker_count = current_joker_count
+        shop_filled = false
+        shop_enter_time = love.timer.getTime()
+    end
+
+    if shop_enter_time == 0 then
+        shop_enter_time = love.timer.getTime()
+    end
+
+    -- ALWAYS remove disallowed cards every frame
+    for i = #G.shop_jokers.cards, 1, -1 do
+        local card = G.shop_jokers.cards[i]
+        if not is_allowed(card) then
+            card:remove()
+            table.remove(G.shop_jokers.cards, i)
+        else
+            strip_edition(card)
         end
     end
 
@@ -36,46 +92,95 @@ local function enforce_shop()
             table.remove(G.shop_booster.cards, i)
         end
     end
-
     if G.shop_consumables and G.shop_consumables.cards then
         for i = #G.shop_consumables.cards, 1, -1 do
             G.shop_consumables.cards[i]:remove()
             table.remove(G.shop_consumables.cards, i)
         end
     end
-
     if G.shop_vouchers and G.shop_vouchers.cards then
         for i = #G.shop_vouchers.cards, 1, -1 do
             G.shop_vouchers.cards[i]:remove()
             table.remove(G.shop_vouchers.cards, i)
         end
     end
-end
 
+    -- Mark filled after 0.5s — no manual card creation
+    if shop_filled then return end
+    if love.timer.getTime() - shop_enter_time < 0.5 then return end
+    shop_filled = true
+end
+------------------------------------------------------------------
+-- HOOK GAME LOOP
+------------------------------------------------------------------
 local orig_update = Game.update
 function Game:update(dt)
     orig_update(self, dt)
     enforce_shop()
-end
 
--- Intercept shop card creation and replace disallowed jokers
-local orig_create_card_for_shop = create_card_for_shop
-function create_card_for_shop(area, forced_tag)
-    local card = orig_create_card_for_shop(area, forced_tag)
-    if card and card.ability and card.ability.set == "Joker" then
-        if not is_allowed_key(card.config.center_key) then
-            local replace_key = ALLOWED_JOKER_LIST[math.random(#ALLOWED_JOKER_LIST)]
-            card:set_ability(G.P_CENTERS[replace_key])
+    -- Disable blind skipping: hide the Skip button during blind select
+    if G.STATE == G.STATES.BLIND_SELECT then
+        if G.blind_select_opts then
+            for _, opt in pairs(G.blind_select_opts) do
+                if opt.skip then
+                    opt.skip = false
+                end
+            end
         end
     end
-    return card
 end
 
+------------------------------------------------------------------
+-- INTERCEPT SHOP CARD CREATION
+------------------------------------------------------------------
+local orig_create_card_for_shop = create_card_for_shop
+function create_card_for_shop(area, forced_tag)
+    local card = orig_create_card_for_shop(area, nil)
+    if card and card.ability and card.ability.set == "Joker" then
+
+        local owned = {}
+        if G.jokers and G.jokers.cards then
+            for _, c in ipairs(G.jokers.cards) do
+                if c.config and c.config.center_key then
+                    owned[c.config.center_key] = true
+                end
+            end
+        end
+
+        local in_shop = {}
+        if G.shop_jokers and G.shop_jokers.cards then
+            for _, c in ipairs(G.shop_jokers.cards) do
+                if c.config and c.config.center_key then
+                    in_shop[c.config.center_key] = true
+                end
+            end
+        end
+
+        local available = {}
+        for _, key in ipairs(ALLOWED_JOKER_LIST) do
+            if not owned[key] and not in_shop[key] then
+                table.insert(available, key)
+            end
+        end
+
+        if #available > 0 then
+            local replace_key = available[math.random(#available)]
+            card:set_ability(G.P_CENTERS[replace_key])
+            strip_edition(card)
+        end
+        -- If no available jokers, just return card as-is
+        -- enforce_shop will remove it cleanly next frame
+    end
+    return card  -- NEVER return nil
+end
+
+------------------------------------------------------------------
+-- HOOK START RUN
+------------------------------------------------------------------
 local orig_start_run = Game.start_run
 function Game:start_run(...)
     orig_start_run(self, ...)
 
-    -- Force all deck cards to Hearts
     G.E_MANAGER:add_event(Event({
         trigger = "condition",
         blocking = false,
@@ -84,6 +189,8 @@ function Game:start_run(...)
             for _, card in pairs(G.deck.cards) do
                 if card.config and card.config.card then
                     card:change_suit("Hearts")
+                    strip_enhancement(card)
+                    strip_seal(card)
                 end
             end
             return true
@@ -91,4 +198,27 @@ function Game:start_run(...)
     }))
 end
 
-sendInfoMessage("RL SIMPLIFY (JOKERS + NO VOUCHERS + HEARTS)", "BB.RL")
+------------------------------------------------------------------
+-- DISABLE BOSS BLIND EFFECTS
+-- Hook into blind debuff application and neutralise it
+------------------------------------------------------------------
+local orig_blind_is_debuffed = Blind.is_debuffed
+if orig_blind_is_debuffed then
+    function Blind:is_debuffed(card)
+        return false  -- boss blind never debuffs any card
+    end
+end
+
+------------------------------------------------------------------
+-- DISABLE TAGS
+-- Tags appear after defeating a blind; hook the tag creation
+------------------------------------------------------------------
+local orig_add_tag = add_tag
+if orig_add_tag then
+    function add_tag(tag)
+        -- Do nothing — tags are disabled
+        return
+    end
+end
+
+sendInfoMessage("RL SIMPLIFY LOADED", "BB.RL")
