@@ -188,7 +188,7 @@ function Game:start_run(...)
             if not G.deck or not G.deck.cards then return false end
             for _, card in pairs(G.deck.cards) do
                 if card.config and card.config.card then
-                    card:change_suit("Hearts")
+                    -- card:change_suit("Hearts")
                     strip_enhancement(card)
                     strip_seal(card)
                 end
@@ -199,13 +199,35 @@ function Game:start_run(...)
 end
 
 ------------------------------------------------------------------
--- DISABLE BOSS BLIND EFFECTS
--- Hook into blind debuff application and neutralise it
+-- DISABLE ALL BOSS BLIND EFFECTS
 ------------------------------------------------------------------
-local orig_blind_is_debuffed = Blind.is_debuffed
-if orig_blind_is_debuffed then
-    function Blind:is_debuffed(card)
-        return false  -- boss blind never debuffs any card
+if Blind then
+    function Blind:debuff_hand(cards, poker_hand, handname, check)
+        return false
+    end
+
+    function Blind:debuff_card(card, from_blind)
+        return false
+    end
+
+    function Blind:press_play()
+    end
+
+    local orig_set_blind = Blind.set_blind
+        function Blind:set_blind(blind, reset, silent)
+            if blind and blind.boss then
+            -- Keep boss table intact (game needs boss_colour etc for rendering i think)
+            -- but strip all effect-causing fields
+            blind.boss.triggered = false
+            blind.boss.effect = nil
+            blind.boss.vars = {}
+            -- Clear the effect on the blind itself
+            blind.effect = ""
+            blind.vars = {}
+            blind.pre_boss = nil
+            blind.triggered = false
+        end
+    orig_set_blind(self, blind, reset, silent)
     end
 end
 
